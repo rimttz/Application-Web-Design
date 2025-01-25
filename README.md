@@ -12,4 +12,4 @@
 
 - Lista ordenada
           
-[Safari]((https://markdown.es/sintaxis-markdown/#google_vignette) 
+[Safari](https://markdown.es/sintaxis-markdown/#google_vignette) 
