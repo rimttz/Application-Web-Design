@@ -1,100 +1,104 @@
-#Definicón del modelo
-<?php
-
-namespace App\Models;
-
-use Illuminate\Database\Eloquent\Model;
-
-class Superheroe extends Model
+#Modificar el controlador para guardar la foto en el servidor
+public function store(Request $request)
 {
-    protected $fillable = [
-        'nombre_real', 
-        'nombre_superheroe', 
-        'foto_url', 
-        'informacion_adicional'
-    ];
+    $request->validate([
+        'nombre_real' => 'required',
+        'nombre' => 'required',
+        'foto' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
+        'informacion' => 'nullable'
+    ]);
+
+    if ($request->hasFile('foto')) {
+        $ruta_foto = $request->file('foto')->store('public/superheroes');
+        $ruta_foto = str_replace('public/', 'storage/', $ruta_foto);
+    } else {
+        $ruta_foto = null;
+    }
+
+    Superheroe::create([
+        'nombre_real' => $request->nombre_real,
+        'nombre' => $request->nombre,
+        'foto' => $ruta_foto,
+        'informacion' => $request->informacion
+    ]);
+
+    return redirect()->route('superheroes.index');
+}
+#Este es el método para editar a un superheroe
+public function update(Request $request, Superheroe $superheroe)
+{
+    $request->validate([
+        'nombre_real' => 'required',
+        'nombre' => 'required',
+        'foto' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
+        'informacion' => 'nullable'
+    ]);
+
+    if ($request->hasFile('foto')) {
+        $ruta_foto = $request->file('foto')->store('public/superheroes');
+        $ruta_foto = str_replace('public/', 'storage/', $ruta_foto);
+        $superheroe->foto = $ruta_foto;
+    }
+
+    $superheroe->update($request->except('foto') + ['foto' => $superheroe->foto]);
+
+    return redirect()->route('superheroes.index');
 }
 
-#Creacion de rutas
-use App\Http\Controllers\SuperheroeController;
-
-Route::resource('superheroes', SuperheroeController::class);
-
-#CRUD en el controlador
-
-<?php
-namespace App\Http\Controllers;
-
-use App\Models\Superheroe;
-use Illuminate\Http\Request;
-
-class SuperheroeController extends Controller
+#Implementacion de eliminacion logica
+public function destroy(Superheroe $superheroe)
 {
-    public function index() {
-        $superheroes = Superheroe::all();
-        return view('superheroes.index', compact('superheroes'));
-    }
-
-    public function create() {
-        return view('superheroes.create');
-    }
-
-    public function store(Request $request) {
-        Superheroe::create($request->all());
-        return redirect()->route('superheroes.index')->with('success', '¡Superhéroe registrado con éxito!');
-    }
-
-    public function show(Superheroe $superheroe) {
-        return view('superheroes.show', compact('superheroe'));
-    }
-
-    public function edit(Superheroe $superheroe) {
-        return view('superheroes.edit', compact('superheroe'));
-    }
-
-    public function update(Request $request, Superheroe $superheroe) {
-        $superheroe->update($request->all());
-        return redirect()->route('superheroes.index')->with('success', '¡Superhéroe actualizado con éxito!');
-    }
-
-    public function destroy(Superheroe $superheroe) {
-        $superheroe->delete();
-        return redirect()->route('superheroes.index')->with('success', '¡Superhéroe eliminado con éxito!');
-    }
+    $superheroe->delete();
+    return redirect()->route('superheroes.index');
 }
+#Mostrar solo a los superheroes que se encuentran activos
+public function index()
+{
+    $superheroes = Superheroe::whereNull('deleted_at')->get();
+    return view('superheroes.index', compact('superheroes'));
+}
+#Creacion de vista para restaurar a superheroes
+public function eliminados()
+{
+    $superheroes = Superheroe::onlyTrashed()->get();
+    return view('superheroes.eliminados', compact('superheroes'));
+}
+#metodo de restauracion 
+public function restaurar($id)
+{
+    $superheroe = Superheroe::withTrashed()->find($id);
+    $superheroe->restore();
 
-#Creacion de vistas (index.blade.php)
+    return redirect()->route('superheroes.index');
+}
+#rutas de web php
+Route::get('superheroes/eliminados', [SuperheroeController::class, 'eliminados'])->name('superheroes.eliminados');
+Route::post('superheroes/{id}/restaurar', [SuperheroeController::class, 'restaurar'])->name('superheroes.restaurar');
+
+
+#vista de eliminados
 @extends('layouts.app')
 
 @section('content')
-    <h1>Lista de Superhéroes</h1>
-    <a href="{{ route('superheroes.create') }}">Añadir Superhéroe</a>
+<h1>Superhéroes Eliminados</h1>
 
-    @foreach ($superheroes as $superheroe)
-        <p>{{ $superheroe->nombre_superheroe }} ({{ $superheroe->nombre_real }})</p>
+<table>
+    <tr>
+        <th>Nombre</th>
+        <th>Acciones</th>
+    </tr>
+    @foreach($superheroes as $superheroe)
+    <tr>
+        <td>{{ $superheroe->nombre }}</td>
+        <td>
+            <form action="{{ route('superheroes.restaurar', $superheroe->id) }}" method="POST">
+                @csrf
+                <button type="submit">Restaurar</button>
+            </form>
+        </td>
+    </tr>
     @endforeach
-@endsection
+</table>
 
-#(create.blade.php)
-@extends('layouts.app')
-
-@section('content')
-    <h1>Registrar Superhéroe</h1>
-
-    <form method="POST" action="{{ route('superheroes.store') }}">
-        @csrf
-        <label>Nombre Real:</label>
-        <input type="text" name="nombre_real" required>
-        
-        <label>Nombre de Superhéroe:</label>
-        <input type="text" name="nombre_superheroe" required>
-
-        <label>URL de la Foto:</label>
-        <input type="text" name="foto_url" required>
-
-        <label>Información Adicional:</label>
-        <textarea name="informacion_adicional"></textarea>
-
-        <button type="submit">Guardar</button>
-    </form>
+<a href="{{ route('superheroes.index') }}">Volver a la lista</a>
 @endsection
